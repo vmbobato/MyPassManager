@@ -1,6 +1,6 @@
 import tkinter as tk
 import random
-import json
+import mysql.connector
 
 
 def generate_password():
@@ -9,7 +9,7 @@ def generate_password():
     num = "1234567890"
     spc_char = "[]{}\?!@#%&*()/=+"
     pwd = alpha + alphaCase + num + spc_char
-    pwd = "".join(random.sample(pwd, 14))
+    pwd = "".join(random.sample(pwd, 17))
     return pwd
 
 
@@ -35,6 +35,10 @@ class MyPasswordManager:
         self.go = None
         self.done_bt = None
         self.alert = None
+        self.copy_button = None
+        self.database = 'mypassmanager'
+        self.authentication_table = 'auth'
+        self.website_table = 'website_data'
 
         # customize the window
         self.root.title("MyPWD Manager - Login")
@@ -46,6 +50,14 @@ class MyPasswordManager:
         x = (screen_width - self.root.winfo_reqwidth()) // 2
         y = (screen_height - self.root.winfo_reqheight()) // 2
         self.root.geometry("+{}+{}".format(x, y))
+
+        # Initialize MySQL API
+        self.connection = mysql.connector.connect(
+            user="root",
+            password="root",
+            database=self.database
+        )
+        self.cursor = self.connection.cursor()
 
         self.main()
         self.root.mainloop()
@@ -76,15 +88,15 @@ class MyPasswordManager:
         self.password_label.destroy()
         self.password_entry.destroy()
         self.submit_button.destroy()
-        string = f"Welcome to MyPWD Manager, {username}!\n\n"
+        string = f"Welcome to MyPWD Manager, {username}!\n"
         self.welcome_label = tk.Label(self.root, text=string, font=self.font)
         self.welcome_label.pack()
 
-        self.add_label = tk.Button(self.root, text="ADD".format(username),
+        self.add_label = tk.Button(self.root, text="Add".format(username),
                                    font=self.font, command=self.add)
         self.add_label.pack()
 
-        self.check_label = tk.Button(self.root, text="CHECK".format(username),
+        self.check_label = tk.Button(self.root, text="Check".format(username),
                                      font=self.font, command=self.check)
         self.check_label.pack()
 
@@ -98,15 +110,22 @@ class MyPasswordManager:
         self.website_entry = tk.Entry(self.root, font=self.font)
         self.website_entry.pack()
 
-        password_generated = generate_password()
-        self.password_generated_label = tk.Label(self.root, text="Generated Password: " + password_generated,
+        gen_pwd = generate_password()
+        self.password_generated_label = tk.Label(self.root, text="Generated Password: " + gen_pwd,
                                                  font=self.font)
         self.password_generated_label.pack()
 
-        self.add_to_db = tk.Button(self.root, text="ADD to DB".format(username), font=self.font,
-                                   command=lambda: self.add_data(password_generated, self.website_entry.get()))
+        self.copy_button = tk.Button(self.root, text="Copy Pwd", font=self.font, command=lambda: self.copy(gen_pwd))
+        self.copy_button.pack()
+
+        self.add_to_db = tk.Button(self.root, text="Add to DB", font=self.font,
+                                   command=lambda: self.add_data(gen_pwd, self.website_entry.get()))
 
         self.add_to_db.pack()
+
+    def copy(self, txt):
+        self.root.clipboard_clear()
+        self.root.clipboard_append(txt)
 
     def check(self):
         self.add_label.destroy()
@@ -121,10 +140,10 @@ class MyPasswordManager:
         self.go.pack()
 
     def add_data(self, pwd, web):
-        data = {web: pwd}
-        with open(web + '.json', 'w') as out:
-            json.dump(data, out)
-            out.close()
+        self.cursor.execute(f"INSERT INTO website_data (website, password) VALUES ('{web}', '{pwd}');")
+        self.connection.commit()
+
+        self.copy_button.destroy()
         self.add_to_db.destroy()
         self.website_entry.destroy()
         self.website_label.destroy()
@@ -136,20 +155,24 @@ class MyPasswordManager:
 
     def check_db(self):
         website = self.website_entry.get()
-        try:
-            with open(website + '.json', 'r') as check_file:
-                pwd_data = json.load(check_file)
-                check_file.close()
-            passwd = pwd_data.get(website)
-            self.pwd_label = tk.Label(self.root, text="Password: " + passwd, font=self.font)
+        self.cursor.execute(f"SELECT * FROM {self.website_table} WHERE website='{website}'")
+        pwd = self.cursor.fetchone()
+
+        if pwd:
+            self.pwd_label = tk.Label(self.root, text=f"Password: {pwd[2]}", font=self.font)
             self.pwd_label.pack()
+            self.copy_button = tk.Button(self.root, text="Copy Pwd", font=self.font, command=lambda: self.copy(pwd[2]))
+            self.copy_button.pack()
             self.done_bt = tk.Button(self.root, text="Done", font=self.font, command=self.clear_check)
             self.done_bt.pack()
-        except FileNotFoundError:
+        else:
             self.alert = tk.Label(self.root, text="Website Not Found", font=self.font)
             self.alert.pack()
 
     def clear_check(self):
+        if self.alert:
+            self.alert.destroy()
+        self.copy_button.destroy()
         self.website_entry.destroy()
         self.pwd_label.destroy()
         self.done_bt.destroy()
@@ -164,7 +187,11 @@ class MyPasswordManager:
         global logged
         username = self.username_entry.get()
         password = self.password_entry.get()
-        if username == "vmb" and password == "root":
+
+        self.cursor.execute(f"SELECT * FROM {self.authentication_table} WHERE username='{username}'")
+        row = self.cursor.fetchone()
+
+        if row and password == row[2]:
             self.username_label.destroy()
             self.username_entry.destroy()
             self.password_label.destroy()
@@ -175,4 +202,5 @@ class MyPasswordManager:
             self.error_label.config(text="Invalid Username and/or Password")
 
 
-App = MyPasswordManager()
+if __name__ == "__main__":
+    App = MyPasswordManager()
