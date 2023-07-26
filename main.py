@@ -1,6 +1,8 @@
 import tkinter as tk
 import random
+import pandas as pd
 import mysql.connector
+import sys
 
 
 def generate_password():
@@ -17,25 +19,7 @@ class MyPasswordManager:
     def __init__(self):
         self.root = tk.Tk()
         self.font = ("Arial", 14)
-        self.username_entry = None
-        self.password_entry = None
-        self.username_label = None
-        self.password_label = None
-        self.submit_button = None
-        self.error_label = None
-        self.add_label = None
-        self.check_label = None
-        self.logout_label = None
-        self.website_entry = None
-        self.website_label = None
-        self.password_generated_label = None
-        self.add_to_db = None
-        self.welcome_label = None
-        self.pwd_label = None
-        self.go = None
-        self.done_bt = None
-        self.alert = None
-        self.copy_button = None
+
         self.database = 'mypassmanager'
         self.authentication_table = 'auth'
         self.website_table = 'website_data'
@@ -53,8 +37,8 @@ class MyPasswordManager:
 
         # Initialize MySQL API
         self.connection = mysql.connector.connect(
-            user="root",
-            password="root",
+            user=sys.argv[1],
+            password=sys.argv[2],
             database=self.database
         )
         self.cursor = self.connection.cursor()
@@ -81,14 +65,9 @@ class MyPasswordManager:
         self.error_label.pack()
 
     def login(self):
-        self.error_label.config(text="")
+        self.clear_screen()
         self.root.title(f"MyPWD Manager / {username}")
-        self.username_label.destroy()
-        self.username_entry.destroy()
-        self.password_label.destroy()
-        self.password_entry.destroy()
-        self.submit_button.destroy()
-        string = f"Welcome to MyPWD Manager, {username}!\n"
+        string = f"\nWelcome to MyPWD Manager, {username}!\n"
         self.welcome_label = tk.Label(self.root, text=string, font=self.font)
         self.welcome_label.pack()
 
@@ -101,8 +80,11 @@ class MyPasswordManager:
         self.check_label.pack()
 
     def add(self):
-        self.add_label.destroy()
-        self.check_label.destroy()
+        self.clear_screen()
+
+        string = f"Welcome to MyPWD Manager, {username}!\n"
+        self.welcome_label = tk.Label(self.root, text=string, font=self.font)
+        self.welcome_label.pack()
 
         self.website_label = tk.Label(self.root, text="Website:", font=self.font)
         self.website_label.pack()
@@ -111,7 +93,7 @@ class MyPasswordManager:
         self.website_entry.pack()
 
         gen_pwd = generate_password()
-        self.password_generated_label = tk.Label(self.root, text="Generated Password: " + gen_pwd,
+        self.password_generated_label = tk.Label(self.root, text=f"Generated Password: {gen_pwd}",
                                                  font=self.font)
         self.password_generated_label.pack()
 
@@ -123,38 +105,54 @@ class MyPasswordManager:
 
         self.add_to_db.pack()
 
+        self.back_button = tk.Button(self.root, text="<- Back", font=self.font, command=self.login)
+        self.back_button.pack()
+
     def copy(self, txt):
         self.root.clipboard_clear()
         self.root.clipboard_append(txt)
 
     def check(self):
-        self.add_label.destroy()
-        self.check_label.destroy()
+        self.clear_screen()
+
+        string = f"Welcome to MyPWD Manager, {username}!\n"
+        self.welcome_label = tk.Label(self.root, text=string, font=self.font)
+        self.welcome_label.pack()
+
+        website_list_options = ['-']
+
+        self.cursor.execute(f"SELECT website FROM {self.website_table};")
+        df = pd.DataFrame(self.cursor.fetchall())
+        df.rename(columns={0: 'website'}, inplace=True)
+
+        for website in df['website']:
+            website_list_options.append(website)
 
         self.website_label = tk.Label(self.root, text="Website:", font=self.font)
         self.website_label.pack()
-        self.website_entry = tk.Entry(self.root, font=self.font)
-        self.website_entry.pack()
 
-        self.go = tk.Button(self.root, text="Check DB!".format(username), font=self.font, command=self.check_db)
+        self.option_var = tk.StringVar(self.root)
+        self.option_var.set(website_list_options[0])
+
+        self.option_menu = tk.OptionMenu(self.root, self.option_var, *website_list_options)
+        self.option_menu.pack()
+
+        self.go = tk.Button(self.root, text="Check Pwd".format(username), font=self.font, command=self.check_db)
         self.go.pack()
+
+        self.back_button = tk.Button(self.root, text="<- Back", font=self.font, command=self.login)
+        self.back_button.pack()
 
     def add_data(self, pwd, web):
         self.cursor.execute(f"INSERT INTO website_data (website, password) VALUES ('{web}', '{pwd}');")
         self.connection.commit()
 
-        self.copy_button.destroy()
-        self.add_to_db.destroy()
-        self.website_entry.destroy()
-        self.website_label.destroy()
-        self.password_generated_label.destroy()
-        self.password_generated_label.destroy()
-        self.welcome_label.destroy()
+        self.clear_screen()
 
-        self.main()
+        self.login()
 
     def check_db(self):
-        website = self.website_entry.get()
+        website = self.option_var.get()
         self.cursor.execute(f"SELECT * FROM {self.website_table} WHERE website='{website}'")
         pwd = self.cursor.fetchone()
 
@@ -170,16 +168,8 @@ class MyPasswordManager:
             self.alert.pack()
 
     def clear_check(self):
-        if self.alert:
-            self.alert.destroy()
-        self.copy_button.destroy()
-        self.website_entry.destroy()
-        self.pwd_label.destroy()
-        self.done_bt.destroy()
-        self.website_label.destroy()
-        self.go.destroy()
-        self.welcome_label.destroy()
-        self.main()
+        self.clear_screen()
+        self.login()
 
     def check_cred(self):
         global username
@@ -192,14 +182,14 @@ class MyPasswordManager:
         row = self.cursor.fetchone()
 
         if row and password == row[2]:
-            self.username_label.destroy()
-            self.username_entry.destroy()
-            self.password_label.destroy()
-            self.password_entry.destroy()
-            self.submit_button.destroy()
+            self.clear_screen()
             self.login()
         else:
             self.error_label.config(text="Invalid Username and/or Password")
+
+    def clear_screen(self):
+        for widget in self.root.winfo_children():
+            widget.destroy()
 
 
 if __name__ == "__main__":
